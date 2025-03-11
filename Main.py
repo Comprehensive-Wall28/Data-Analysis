@@ -9,58 +9,80 @@ from sklearn.decomposition import PCA
 
 dataset = read_csv('employee_attrition_dataset.csv') #read the CSV
 
-test_flag = False #Enable to print all
-
+test_flag = False
 if test_flag:
-
     (dataset.head(12)) #To print the first 12 rows
 
+test_type_print = False
+if test_type_print:
     print(dataset.tail(12)) #To print the last 12 rows
 
+test_type_print = False
+if test_type_print:
     print(dataset.dtypes) #To print the data types for each column
 
+test_firstcolumnname = False
+if test_firstcolumnname:
     print(dataset.columns[0]) #To print the first column name
 
+test_type_print = False
+if test_type_print:
     print(dataset.info()) #To print the data types for each column
 
+test_distinct_vals = False
+if test_distinct_vals:
     num_distinct_values = dataset['Age'].nunique() #Choose a categorical attribute and display the distinct values it contains
     distinct_values = dataset['Age'].unique()
     print("\nNumber of distinct values in 'Age': {}".format(num_distinct_values))
     print("Distinct values in 'Age':")
     print(distinct_values)
 
+test_frequent_value = False
+if test_frequent_value:
     print(dataset['Gender'].mode()) #To print the most frequently occurring value in the chosen categorical attribute
 
+test_mean_median = False
+if test_mean_median:
     column = 'Age' #To calculate the mean, median, standard deviation and the quantile for the select column
     print(dataset[column].mean())
     print(dataset[column].median())
     print(dataset[column].std())
     print(dataset[column].quantile(0.20))
 
+test_filter_attribute = False
+if test_filter_attribute:
     filtered_data = dataset[dataset['Age'] > 30] #Filter based on age
     print("Filtered data (Age > 30):")
     print(filtered_data)
 
+test_filter_letter = False
+if test_filter_letter:
     filtered_on_name = dataset[dataset['Gender'].str.startswith('F')] #To filter based on letter
     print(filtered_on_name)
 
+test_duplicate_remove = False
+if test_duplicate_remove:
     no_duplicates = dataset.drop_duplicates() #To remove the dupilcated rows
     print (no_duplicates)
 
+test_type_change = False
+if test_type_change:
     dataset['Age'] = dataset['Age'].astype(str) #To change the data type from int to str
     print(dataset.dtypes)
 
+test_group = False
+if test_group:
     grouped_data = dataset.groupby(['Gender', 'Marital_Status']).size().reset_index(name='Count') #Group data based on two attributes
     print(grouped_data)
 
+test_check_missing = False
+if test_check_missing:
     missing_values = dataset.isnull().sum() #Check for missing vals
     print("Missing values in the dataset:")
     print(missing_values)
 
-    dataset['Age'].fillna(dataset['Age'].median(), inplace=True) #Replace missing values
-    dataset['Gender'].fillna(dataset['Gender'].mode()[0], inplace=True)
-    print("\nMissing values replaced.")
-
+test_missing_vals = False
+if test_missing_vals:
     missing_values = dataset.isnull().sum() #Check for missing vals
     print("Missing values in the dataset:")
     print(missing_values)
@@ -73,14 +95,18 @@ if test_flag:
     print("Missing values in the dataset:")
     print(missing_values)
 
+test_bin = False
+if test_bin:
     dataset['Monthly_Income_bins'] = pd.cut(dataset['Monthly_Income'], bins=5) #Divide in bins and count
     bin_counts = dataset['Monthly_Income_bins'].value_counts().sort_index()
     print(bin_counts)
 
+test_maxrow = False
+if test_maxrow:
     max_row = dataset.loc[dataset['Monthly_Income'].idxmax()] #To find the row with the maximum value
     print(max_row)
 
-test_boxplot = True
+test_boxplot = False
 if test_boxplot:
     sns.boxplot(y=dataset['Monthly_Income']) #boxplot for Monthly Income since it's significant for Employee's satisfaction
     plt.title('Boxplot of Monthly Income')
