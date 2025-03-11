@@ -80,33 +80,38 @@ if test_flag:
     max_row = dataset.loc[dataset['Monthly_Income'].idxmax()] #To find the row with the maximum value
     print(max_row)
 
+test_boxplot = True
+if test_boxplot:
     sns.boxplot(y=dataset['Monthly_Income']) #boxplot for Monthly Income since it's significant for Employee's satisfaction
     plt.title('Boxplot of Monthly Income')
-    plt.xlabel('Monthly Income')
-    plt.savefig('boxplot.png')
+    plt.ylabel('Monthly Income')
+    plt.show()
+    #Median at 12000$
 
+test_histplot = False
+if test_histplot:
     sns.histplot(x = dataset['Monthly_Income']) #histogram for Monthly Income
     plt.title('Histogram of Monthly Income')
     plt.xlabel('Monthly Income')
-    plt.savefig('histogram.png')
+    plt.show()
+    #The graph is normal bell shape, 20000 is the mode. Data is variable with no outliers
 
+test_scatter = False
+if test_scatter:
     plt.scatter(x = dataset['Monthly_Income'], y = dataset['Job_Satisfaction']) #scatter plot for Monthly Income and Job Satisfaction
     plt.title('Scatter Plot of Monthly Income and Job Satisfaction')
-    plt.xlabel('Monthly Income scatter')
-    plt.savefig('scatter.png')
-
-    plt.figure(figsize=(8, 6))
-    correlation_matrix = dataset[['Age', 'Monthly_Income', 'Job_Satisfaction']].corr()  # Compute correlation for all numerical columns using the heatmap
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
-    plt.title('Correlation Heatmap of Numerical Features')
+    plt.xlabel('Monthly Income')
+    plt.ylabel('Job Satisfaction')
     plt.show()
+    #This shows very weak correlation between monthly income and job satisfaction
 
+test_normalization = False
+if test_normalization:
     numerical_features = dataset.select_dtypes(include=['number']) #Normalize numerical attributes
     scaler = StandardScaler()
     scaled_numerical = scaler.fit_transform(numerical_features)
     scaled_numerical_df = pd.DataFrame(scaled_numerical, columns=numerical_features.columns)
     print(scaled_numerical_df.head().to_markdown(index=False, numalign="left", stralign="left"))
-    print(scaled_numerical_df.info())
 
 
 # Select numerical features for PCA
