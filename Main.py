@@ -113,44 +113,79 @@ if test_normalization:
     scaled_numerical_df = pd.DataFrame(scaled_numerical, columns=numerical_features.columns)
     print(scaled_numerical_df.head().to_markdown(index=False, numalign="left", stralign="left"))
 
+test_PCA = False
+if test_PCA:
+    #Select columns with numerical data
+    numerical_features = dataset.select_dtypes(include=['number'])
+    # replace missing values with the median of each column
+    numerical_features = numerical_features.fillna(numerical_features.median())
+    # Standardize the numerical features
+    scaler = StandardScaler()
+    scaled_numerical = scaler.fit_transform(numerical_features)
+    # Apply PCA with 2 components
+    pca = PCA(n_components=2)
+    principalComponents = pca.fit_transform(scaled_numerical)
+    # Create a DataFrame for the principal components
+    principalDf = pd.DataFrame(data=principalComponents, columns=['principal component 1', 'principal component 2'])
+    # Display the rows
+    #print(principalDf.head().to_markdown(index=False, numalign="left", stralign="left"))
+    # Print the column names and their data types
+    #print(principalDf.info())
+    # Visualize the first two standardized numerical features
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.scatter(scaled_numerical[:, 0], scaled_numerical[:, 1])
+    plt.title('Data Before PCA')
+    plt.xlabel('Feature 1')
+    plt.ylabel('Feature 2')
+    # Visualize the principal components
+    plt.subplot(1, 2, 2)
+    plt.scatter(principalComponents[:, 0], principalComponents[:, 1])
+    plt.title('Data After PCA')
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    # Show the plots
+    plt.show()
 
-# Select numerical features for PCA
-numerical_features = dataset.select_dtypes(include=['number'])
+test_heatmap = False
+if test_heatmap:
+    numerical_features = dataset.select_dtypes(include=['number'])
+    correlation_matrix = numerical_features.corr()
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+    plt.title('Correlation Heatmap of Numerical Features')
+    plt.show()
+    #Strong correlation between years at company and getting a promotion (0.7)
 
-# Impute missing values with the median of each column
-numerical_features = numerical_features.fillna(numerical_features.median())
+test_pA = False #Analytics part A
+if test_pA:
+    numerical_columns = dataset.select_dtypes(include=['int64', 'float64']).columns
+    #Use this var to get for all numerical attributes ^
+    correlation_matrix = dataset[['Monthly_Income', 'Job_Satisfaction', 'Distance_From_Home', 'Years_at_Company']].corr()
+    # from 1 (meaning positively correlated) to -1 (meaning negatively correlated)
+    print("Correlation Matrix:")
+    print(correlation_matrix)
 
-# Standardize the numerical features
-scaler = StandardScaler()
-scaled_numerical = scaler.fit_transform(numerical_features)
+test_pB = False #Analytics part B
+if test_pB:
+    dataset = pd.read_csv('employee_attrition_dataset.csv') #Check balance of variables
+    variable_count = dataset['Gender'].value_counts()
+    print("Number of both variables respectively:")
+    print(variable_count)
+    print("Percentage of both variables: ")
+    print(variable_count / len(dataset) * 100)
+    #For gender dataset is balanced
 
-# Apply PCA with 2 components
-pca = PCA(n_components=2)
-principalComponents = pca.fit_transform(scaled_numerical)
-
-# Create a DataFrame for the principal components
-principalDf = pd.DataFrame(data=principalComponents, columns=['principal component 1', 'principal component 2'])
-
-# Display the first 5 rows
-print(principalDf.head().to_markdown(index=False, numalign="left", stralign="left"))
-
-# Print the column names and their data types
-print(principalDf.info())
-
-# Visualize the first two standardized numerical features
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
-plt.scatter(scaled_numerical[:, 0], scaled_numerical[:, 1])
-plt.title('Data Before PCA')
-plt.xlabel('Feature 1')
-plt.ylabel('Feature 2')
-
-# Visualize the principal components
-plt.subplot(1, 2, 2)
-plt.scatter(principalComponents[:, 0], principalComponents[:, 1])
-plt.title('Data After PCA')
-plt.xlabel('Principal Component 1')
-plt.ylabel('Principal Component 2')
-
-# Show the plots
-plt.show()
+test_pC = False   #Analytics part C
+if test_pC:
+    dataset['Income_Satisfaction'] = dataset['Monthly_Income'] * dataset['Job_Satisfaction']
+    # Create new feature to combine income and satisfaction, drawing a connection
+    dataset['Age_Squared'] = dataset['Age'] ** 2
+    #Catches non-linear relationships between Age and other features
+    dataset['Income_Bin'] = pd.cut(dataset['Monthly_Income'], bins=[3000, 6000, 8000, 20000], labels=['Low', 'Medium', 'High'])
+    #Categorize income into bin with low, medium and high
+    dataset['Income_to_Age_Ratio'] = dataset['Monthly_Income'] / dataset['Age']
+    #Shows income relatively to age
+    print("Dataset with New Features:")
+    new_features = ['Income_Satisfaction', 'Age_Squared', 'Income_Bin', 'Income_to_Age_Ratio']
+    print(dataset[new_features])
