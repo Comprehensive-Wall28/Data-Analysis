@@ -183,7 +183,7 @@ if test_heatmap:
     plt.show()
     #Strong correlation between years at company and getting a promotion (0.7)
 
-test_pA = False #Analytics part A
+test_pA = True #Analytics part A
 if test_pA:
     numerical_columns = dataset.select_dtypes(include=['int64', 'float64']).columns
     #Use this var to get for all numerical attributes ^
@@ -215,3 +215,44 @@ if test_pC:
     print("Dataset with New Features:")
     new_features = ['Income_Satisfaction', 'Age_Squared', 'Income_Bin', 'Income_to_Age_Ratio']
     print(dataset[new_features])
+
+
+    #Correlation_test
+
+# Calculate mutual information scores (requires X_train, y_train)
+# Ensure data is numerical (which it should be after encoding)
+# mi_scores = mutual_info_classif(X_train, y_train, random_state=random_seed)
+# mi_scores = pd.Series(mi_scores, name="MI Scores", index=X_train.columns)
+# mi_scores = mi_scores.sort_values(ascending=False)
+
+# print("Mutual Information Scores (Top 15):")
+# print(mi_scores.head(15))
+
+# # Plotting MI scores
+# plt.figure(figsize=(10, 6))
+# mi_scores.head(15).plot(kind='barh') # Plot top 15
+# plt.title('Top 15 Features by Mutual Information Score')
+# plt.xlabel('MI Score')
+# plt.show()
+
+# You can then select the top N features based on these scores
+# top_n = 15
+# selected_features_mi = mi_scores.head(top_n).index.tolist()
+# X_train_selected = X_train[selected_features_mi]
+# X_test_selected = X_test[selected_features_mi]
+
+#Cleanup?
+
+# # Example: Remove features with zero variance (constant features)
+# selector = VarianceThreshold(threshold=0.0)
+# # Fit on training data (or all X if done before split)
+# selector.fit(X_train)
+# # Get boolean mask of features to keep
+# mask = selector.get_support()
+# # Apply mask to get selected features
+# X_train_selected = X_train.loc[:, mask]
+# X_test_selected = X_test.loc[:, mask] # Use same mask for test set
+
+# print(f"Original feature count: {X_train.shape[1]}")
+# print(f"Features after Variance Threshold: {X_train_selected.shape[1]}")
+# Now use X_train_selected, X_test_selected for scaling and modeling
