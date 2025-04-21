@@ -5,14 +5,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.feature_selection import mutual_info_classif
-import matplotlib.pyplot as plt
+# Feature selection imports removed as they are not used after preprocessing in this version
+# import matplotlib.pyplot as plt # Keep if you plan plots later
 from sklearn.naive_bayes import GaussianNB
-# ADDED: Import for shuffle utility if needed, though df.sample is often sufficient
-from sklearn.utils import shuffle
+# ADDED: Imports for Decision Tree and Random Forest
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+# REMOVED: shuffle import no longer needed for sampling method
+# from sklearn.utils import shuffle
 
-df = pd.read_csv('employee_attrition_dataset.csv')
+df = pd.read_csv('employee_attrition_dataset_10000.csv')
 
 # --- PREPARATION ---
 
@@ -28,8 +30,7 @@ for col in columns_to_encode:
     encoded_values = df_prepared[col].unique()
     mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
     print(f"  Encoded '{col}': Original unique values {original_values} -> Encoded unique values {encoded_values}. Mapping: {mapping}")
-# Attrition: No=0, Yes=1
-# Overtime: No=0, Yes=1
+
 
 # --- One-Hot Encoding ---
 print("\n--- One-Hot Encoding ---")
@@ -114,52 +115,113 @@ print("\nAttrition distribution in original undersampled y:\n", y.value_counts(n
 print("\nAttrition distribution in y_train:\n", y_train.value_counts(normalize=True))
 print("\nAttrition distribution in y_test:\n", y_test.value_counts(normalize=True))
 
+# --- Scaling Features (for models that need it, like KNN) ---
+# Note: Trees/Naive Bayes don't strictly require scaling, so we'll apply it selectively
+print("\n--- Scaling Features ---")
+scaler = StandardScaler()
+# Fit scaler ONLY on the training data
+X_train_scaled = scaler.fit_transform(X_train)
+# Transform both training and test data
+X_test_scaled = scaler.transform(X_test)
+print("Features scaled using StandardScaler (will be used for KNN).")
 
-# --- KNN Model (using undersampled data) ---
+
+# --- KNN Model (using SCALED undersampled data) ---
 if X_train is not None and y_train is not None:
-    print("\n--- K-Nearest Neighbors (KNN) Classifier (on Undersampled Data) ---")
-    # Scaling might be more important now, consider uncommenting if results are poor
-    print("\n--- Scaling Features ---")
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    print("Features scaled using StandardScaler.")
+    print("\n--- K-Nearest Neighbors (KNN) Classifier (on Scaled Undersampled Data) ---")
 
     k_value = 6
     print(f"Initializing KNN classifier with k={k_value}")
     knn_model = KNeighborsClassifier(n_neighbors=k_value)
-    print("Fitting the KNN model to the undersampled training data...")
-    # Use unscaled data for now
-    knn_model.fit(X_train, y_train)
 
-    print("Predictions made on the test set using KNN.")
-    y_pred_knn = knn_model.predict(X_test) # Renamed variable
+    print("Fitting the KNN model to the SCALED undersampled training data...")
+    # MODIFIED: Fit on scaled data
+    knn_model.fit(X_train_scaled, y_train)
+
+    print("Predictions made on the SCALED test set using KNN.")
+     # MODIFIED: Predict on scaled data
+    y_pred_knn = knn_model.predict(X_test_scaled)
 
     print("\n--- Evaluating KNN Model (on Undersampled Data) ---")
-    accuracy_knn = accuracy_score(y_test, y_pred_knn) # Renamed variable
+    accuracy_knn = accuracy_score(y_test, y_pred_knn)
     print(f"KNN Model Accuracy: {accuracy_knn:.4f}")
-    # Added zero_division=0 to handle potential warnings if a class isn't predicted in the test split
+    # Added zero_division=0
     print("\nKNN Classification Report:\n", classification_report(y_test, y_pred_knn, zero_division=0))
     print("\nKNN Confusion Matrix:\n", confusion_matrix(y_test, y_pred_knn))
 
 
-# --- Naive Bayes Model (using undersampled data) ---
+# --- Naive Bayes Model (using UNSCALED undersampled data) ---
+# GaussianNB can technically handle scaled data, but often used unscaled.
+# Let's keep it unscaled for consistency with the previous NB run.
 if X_train is not None and y_train is not None:
-    print("\n--- Gaussian Naive Bayes Classifier (on Undersampled Data) ---")
+    print("\n--- Gaussian Naive Bayes Classifier (on Unscaled Undersampled Data) ---")
 
     print("Initializing Gaussian Naive Bayes classifier...")
     nb_model = GaussianNB()
 
-    print("Fitting the Naive Bayes model to the undersampled training data...")
+    print("Fitting the Naive Bayes model to the UNSCALED undersampled training data...")
+    # Fit on unscaled data
     nb_model.fit(X_train, y_train)
 
-    print("Predictions made on the test set using Naive Bayes.")
+    print("Predictions made on the UNSCALED test set using Naive Bayes.")
+    # Predict on unscaled data
     y_pred_nb = nb_model.predict(X_test)
 
     print("\n--- Evaluating Naive Bayes Model (on Undersampled Data) ---")
     accuracy_nb = accuracy_score(y_test, y_pred_nb)
     print(f"Naive Bayes Model Accuracy: {accuracy_nb:.4f}")
-    # Added zero_division=0 to handle potential warnings
+    # Added zero_division=0
     print("\nNaive Bayes Classification Report:\n", classification_report(y_test, y_pred_nb, zero_division=0))
     print("\nNaive Bayes Confusion Matrix:\n", confusion_matrix(y_test, y_pred_nb))
+
+
+# --- START: Added Decision Tree Model ---
+if X_train is not None and y_train is not None:
+    print("\n--- Decision Tree Classifier (on Unscaled Undersampled Data) ---")
+
+    print("Initializing Decision Tree classifier...")
+    # Using random_state for reproducibility
+    dt_model = DecisionTreeClassifier(random_state=random_seed)
+
+    print("Fitting the Decision Tree model to the UNSCALED undersampled training data...")
+    # Trees don't require scaling
+    dt_model.fit(X_train, y_train)
+
+    print("Predictions made on the UNSCALED test set using Decision Tree.")
+    # Predict on unscaled data
+    y_pred_dt = dt_model.predict(X_test)
+
+    print("\n--- Evaluating Decision Tree Model (on Undersampled Data) ---")
+    accuracy_dt = accuracy_score(y_test, y_pred_dt)
+    print(f"Decision Tree Model Accuracy: {accuracy_dt:.4f}")
+    # Added zero_division=0
+    print("\nDecision Tree Classification Report:\n", classification_report(y_test, y_pred_dt, zero_division=0))
+    print("\nDecision Tree Confusion Matrix:\n", confusion_matrix(y_test, y_pred_dt))
+# --- END: Added Decision Tree Model ---
+
+
+# --- START: Added Random Forest Model ---
+if X_train is not None and y_train is not None:
+    print("\n--- Random Forest Classifier (on Unscaled Undersampled Data) ---")
+
+    print("Initializing Random Forest classifier...")
+    # Using random_state for reproducibility, default n_estimators=100
+    rf_model = RandomForestClassifier(random_state=random_seed)
+
+    print("Fitting the Random Forest model to the UNSCALED undersampled training data...")
+    # Forests also don't strictly require scaling
+    rf_model.fit(X_train, y_train)
+
+    print("Predictions made on the UNSCALED test set using Random Forest.")
+    # Predict on unscaled data
+    y_pred_rf = rf_model.predict(X_test)
+
+    print("\n--- Evaluating Random Forest Model (on Undersampled Data) ---")
+    accuracy_rf = accuracy_score(y_test, y_pred_rf)
+    print(f"Random Forest Model Accuracy: {accuracy_rf:.4f}")
+    # Added zero_division=0
+    print("\nRandom Forest Classification Report:\n", classification_report(y_test, y_pred_rf, zero_division=0))
+    print("\nRandom Forest Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
+# --- END: Added Random Forest Model ---
+
 # --- END: Model Code ---
