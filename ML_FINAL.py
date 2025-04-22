@@ -8,8 +8,6 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-# REMOVED: PCA import
-# from sklearn.decomposition import PCA
 
 # --- Load Data ---
 df = pd.read_csv('employee_attrition_dataset.csv')
@@ -59,28 +57,47 @@ print(f"  One-Hot Encoding applied to: {columns_exist_for_onehot}")
 
 # ---Undersampling Implementation ---
 print("\n--- Performing Undersampling ---")
-random_seed = 42 
+random_seed = 42
+
+undersampling_ratio = 1.0 #MODIFY THIS VALUE TO CONTROL THE LEVEL (e.g., 1.0, 1.5, 2.0)
+
 # Separate majority and minority classes (Attrition: No=0, Yes=1)
 df_majority = df_prepared[df_prepared.Attrition == 0]
 df_minority = df_prepared[df_prepared.Attrition == 1]
 
-if len(df_majority) < len(df_minority):
-     print("Warning: Majority class is smaller than minority class. Undersampling will select all majority samples.")
-     n_samples_majority = len(df_majority)
-else:
-     n_samples_majority = len(df_minority)
+minority_size = len(df_minority)
+majority_size = len(df_majority)
 
-#undersample
+print(f"Original distribution: Majority={majority_size}, Minority={minority_size}")
+print(f"Target undersampling ratio (Majority:Minority): {undersampling_ratio}:1")
+
+if majority_size < minority_size:
+     print("Warning: Initial 'majority' class (Attrition=0) is smaller than 'minority' class (Attrition=1). "
+           "Undersampling logic might behave unexpectedly or not reduce the majority.")
+     desired_majority_samples = int(minority_size * undersampling_ratio)
+     n_samples_majority = min(desired_majority_samples, majority_size) 
+
+else:
+     # Calculate the desired number of majority samples based on the minority size and the ratio
+     desired_majority_samples = int(minority_size * undersampling_ratio)
+     # Ensure we don't try to sample more majority samples than actually exist
+     n_samples_majority = min(desired_majority_samples, majority_size)
+
+print(f"Calculated samples to keep from majority class: {n_samples_majority}")
+
+# Undersample the majority class to the calculated size
 df_majority_undersampled = df_majority.sample(n=n_samples_majority, random_state=random_seed)
 
-# Combine minority class with undersampled majority class
+# Combine the (potentially reduced) minority class with the undersampled majority class
 df_undersampled = pd.concat([df_majority_undersampled, df_minority])
 
 # Shuffle the resulting DataFrame
 df_undersampled = df_undersampled.sample(frac=1, random_state=random_seed).reset_index(drop=True)
 
-print("Undersampled dataset 'Attrition' distribution:\n", df_undersampled.Attrition.value_counts())
+print("Final dataset 'Attrition' distribution after undersampling:\n", df_undersampled.Attrition.value_counts())
+print(f"Final ratio (Majority/Minority): {len(df_undersampled[df_undersampled.Attrition == 0]) / len(df_undersampled[df_undersampled.Attrition == 1]):.2f}:1")
 
+# --- END: Undersampling Implementation ---
 
 # --- START: Feature Selection (Select Specific Features) ---
 print("\n--- Feature Selection (Selecting Specific Features) ---")
@@ -111,10 +128,6 @@ else:
     y = df_prepared[target_variable] # Target 
     X = df_prepared[selected_features] # Features 
 
-# print(f"Target variable (y): {target_variable}")
-# print("Shape of X before split:", X.shape)
-# print("Shape of y before split:", y.shape)
-
 
 # --- Train-Test Split ---
 print("\n--- Splitting Data into Train/Test Sets ---")
@@ -127,15 +140,6 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=random_seed,
     stratify=y 
 )
-
-# print("\n--- Verification of Train/Test Split ---")
-# print("Shape of X_train:", X_train.shape)
-# print("Shape of X_test:", X_test.shape)
-# print("Shape of y_train:", y_train.shape)
-# print("Shape of y_test:", y_test.shape)
-# print(f"\n'{target_variable}' distribution in y_train:\n", y_train.value_counts(normalize=True))
-# print(f"\n'{target_variable}' distribution in y_test:\n", y_test.value_counts(normalize=True))
-
 
 # --- START: Preprocessing Before Models (Missing Values, Scaling) ---
 
@@ -168,9 +172,6 @@ if ans.lower() == 'y':
     X_train_scaled = scaler.fit_transform(X_train)
     # Transform both training and test data
     X_test_scaled = scaler.transform(X_test)
-    # print("Features scaled using StandardScaler.")
-    # print("Shape of X_train_scaled:", X_train_scaled.shape)
-    # print("Shape of X_test_scaled:", X_test_scaled.shape)
 else:
      X_train_scaled = X_train
      X_test_scaled = X_test
