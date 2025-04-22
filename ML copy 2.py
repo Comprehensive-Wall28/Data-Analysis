@@ -4,224 +4,375 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-# Feature selection imports removed as they are not used after preprocessing in this version
-# import matplotlib.pyplot as plt # Keep if you plan plots later
+# Import necessary metrics, including f1_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.naive_bayes import GaussianNB
-# ADDED: Imports for Decision Tree and Random Forest
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-# REMOVED: shuffle import no longer needed for sampling method
-# from sklearn.utils import shuffle
 
+# --- Load Data ---
+# Consider using a larger dataset if available for a 3-way split,
+# but the code will work with the existing one.
 df = pd.read_csv('employee_attrition_dataset_10000.csv')
+print("Dataset loaded.")
 
 # --- PREPARATION ---
 
 df_prepared = df.drop('Employee_ID', axis=1)
 
 # --- Label Encoding ---
-columns_to_encode = ['Attrition', 'Overtime']
-label_encoder = LabelEncoder()
+columns_to_encode = ['Attrition', 'Gender']
+label_encoder_attrition = LabelEncoder()
+label_encoder_gender = LabelEncoder()
+
 print("--- Label Encoding ---")
-for col in columns_to_encode:
-    original_values = df_prepared[col].unique()
-    df_prepared[col] = label_encoder.fit_transform(df_prepared[col])
-    encoded_values = df_prepared[col].unique()
-    mapping = dict(zip(label_encoder.classes_, label_encoder.transform(label_encoder.classes_)))
-    print(f"  Encoded '{col}': Original unique values {original_values} -> Encoded unique values {encoded_values}. Mapping: {mapping}")
+# Encode Attrition
+original_values_attrition = df_prepared['Attrition'].unique()
+df_prepared['Attrition'] = label_encoder_attrition.fit_transform(df_prepared['Attrition'])
+encoded_values_attrition = df_prepared['Attrition'].unique()
+mapping_attrition = dict(zip(label_encoder_attrition.classes_, label_encoder_attrition.transform(label_encoder_attrition.classes_)))
+print(f"  Encoded 'Attrition': Original {original_values_attrition} -> Encoded {encoded_values_attrition}. Mapping: {mapping_attrition}")
+
+
+# Encode Gender
+original_values_gender = df_prepared['Gender'].unique()
+df_prepared['Gender'] = label_encoder_gender.fit_transform(df_prepared['Gender'])
+encoded_values_gender = df_prepared['Gender'].unique()
+mapping_gender = dict(zip(label_encoder_gender.classes_, label_encoder_gender.transform(label_encoder_gender.classes_)))
+print(f"  Encoded 'Gender': Original {original_values_gender} -> Encoded {encoded_values_gender}. Mapping: {mapping_gender}")
+
+
+# Rename the encoded column to Gender_Male IF Male is encoded as 1
+if 'Male' in mapping_gender and mapping_gender['Male'] == 1:
+        df_prepared.rename(columns={'Gender': 'Gender_Male'}, inplace=True)
+        print("  Renamed encoded 'Gender' column to 'Gender_Male'.")
+elif 'Female' in mapping_gender and mapping_gender['Female'] == 1:
+        # If Female is 1, we need to flip the bits to get Gender_Male (where Male=1)
+        print("  Adjusting 'Gender' encoding to create 'Gender_Male' (Male=1).")
+        df_prepared['Gender_Male'] = 1 - df_prepared['Gender']
+        df_prepared.drop('Gender', axis=1, inplace=True)
+else:
+     print("  'Gender' column encoding did not result in 'Gender_Male' (Male=1). Check mapping.")
 
 
 # --- One-Hot Encoding ---
 print("\n--- One-Hot Encoding ---")
-columns_to_encode_onehot = ['Marital_Status', 'Department']
+columns_to_encode_onehot = ['Department'] # Job_Role, Marital_Status removed
 columns_exist_for_onehot = [col for col in columns_to_encode_onehot if col in df_prepared.columns]
-df_prepared = pd.get_dummies(df_prepared, columns=columns_exist_for_onehot, drop_first=False)
-print("  One-Hot Encoding applied.")
-print("Columns after One-Hot Encoding:", df_prepared.columns.tolist())
 
-# --- START: Undersampling Implementation ---
-print("\n--- Performing Random Undersampling ---")
-random_seed = 42 # Use the same random seed for reproducibility
-
-# Separate majority and minority classes (assuming Attrition 'Yes' is 1 and 'No' is 0)
-df_majority = df_prepared[df_prepared.Attrition == 0]
-df_minority = df_prepared[df_prepared.Attrition == 1]
-
-print(f"Original dataset shape: {df_prepared.shape}")
-print(f"Majority class (Attrition=0) count: {len(df_majority)}")
-print(f"Minority class (Attrition=1) count: {len(df_minority)}")
-
-# Undersample the majority class
-df_majority_undersampled = df_majority.sample(n=len(df_minority), random_state=random_seed)
-
-# Combine minority class with undersampled majority class
-df_undersampled = pd.concat([df_majority_undersampled, df_minority])
-
-# Shuffle the resulting DataFrame
-df_undersampled = df_undersampled.sample(frac=1, random_state=random_seed).reset_index(drop=True)
-
-print(f"\nUndersampled dataset shape: {df_undersampled.shape}")
-print("Undersampled dataset 'Attrition' distribution:\n", df_undersampled.Attrition.value_counts())
-# --- END: Undersampling Implementation ---
+if columns_exist_for_onehot:
+    df_prepared = pd.get_dummies(df_prepared, columns=columns_exist_for_onehot, drop_first=False)
+    print(f"  One-Hot Encoding applied to: {columns_exist_for_onehot}")
+else:
+    print("  No columns found for One-Hot Encoding from the specified list.")
 
 
-# --- Feature Selection (using the undersampled data) ---
-print("\n--- Feature Selection ---")
-# Define features to drop (same logic as before, but applied to df_undersampled)
-low_mi_features_to_drop = [
+# --- Undersampling Option ---
+print("\n--- Undersampling Option ---")
+print("Apply undersampling? (y / n)")
+apply_undersampling = input().strip().lower() == 'y'
+df_model_input = None # Will hold the data used for splitting
+
+if apply_undersampling:
+    print("\n--- Performing Undersampling ---")
+    random_seed = 42
+
+    # --- CONTROL PARAMETER ---
+    undersampling_ratio = 1.0 # Balance: 1.0 means 1:1 ratio
+
+    # Separate majority and minority classes (Attrition: No=0, Yes=1)
+    df_majority = df_prepared[df_prepared.Attrition == 0]
+    df_minority = df_prepared[df_prepared.Attrition == 1]
+
+    minority_size = len(df_minority)
+    majority_size = len(df_majority)
+
+    print(f"Original distribution: Majority (0)={majority_size}, Minority (1)={minority_size}")
+    print(f"Target undersampling ratio (Majority:Minority): {undersampling_ratio}:1")
+
+    if majority_size < minority_size:
+         print("Warning: Initial 'majority' class (Attrition=0) is smaller than 'minority' class (Attrition=1). Undersampling may not be effective.")
+         n_samples_majority = majority_size # Keep all majority samples
+    elif minority_size == 0:
+        print("Error: Minority class size is zero. Cannot perform undersampling.")
+        # Handle this case appropriately, maybe exit or skip undersampling
+        n_samples_majority = majority_size # Default to keeping all majority
+        df_model_input = df_prepared # Use original data if undersampling fails
+    else:
+         # Calculate the desired number of majority samples
+         desired_majority_samples = int(minority_size * undersampling_ratio)
+         n_samples_majority = min(desired_majority_samples, majority_size) # Ensure we don't exceed available samples
+
+    print(f"Calculated samples to keep from majority class: {n_samples_majority}")
+
+    if minority_size > 0:
+        # Undersample the majority class
+        df_majority_undersampled = df_majority.sample(n=n_samples_majority, random_state=random_seed)
+        # Combine with the minority class
+        df_undersampled = pd.concat([df_majority_undersampled, df_minority])
+        # Shuffle the resulting DataFrame
+        df_model_input = df_undersampled.sample(frac=1, random_state=random_seed).reset_index(drop=True)
+        print("Final dataset 'Attrition' distribution after undersampling:\n", df_model_input.Attrition.value_counts())
+        if len(df_minority) > 0:
+             final_ratio = len(df_model_input[df_model_input.Attrition == 0]) / len(df_model_input[df_model_input.Attrition == 1])
+             print(f"Final ratio (Majority/Minority): {final_ratio:.2f}:1")
+        else:
+             print("Final ratio calculation skipped as minority size is zero.")
+    else:
+        # If minority size was 0, df_model_input might still be None or df_prepared
+        if df_model_input is None:
+             df_model_input = df_prepared
+        print("Skipped undersampling combination due to zero minority samples.")
+
+else:
+    print("\n--- Skipping Undersampling ---")
+    df_model_input = df_prepared.reset_index(drop=True) # Use the prepared data directly
+
+# --- Feature Selection (Select Specific Features) ---
+print("\n--- Feature Selection (Selecting Specific Features) ---")
+# Define the list of features we want to use for modeling.
+# Ensure these columns exist AFTER encoding and potential renaming (e.g., Gender_Male)
+selected_features = [
+    'Gender_Male',
+    'Department_IT', # Example one-hot encoded feature
+    # Add other one-hot encoded department columns if they exist and are desired
+    'Department_HR',
+    'Department_Sales',
+    'Age',
+    'Years_Since_Last_Promotion',
     'Work_Life_Balance',
-    'Work_Environment_Satisfaction',
-    'Absenteeism',
-    'Gender',
+    'Performance_Rating',
+    'Training_Hours_Last_Year',
     'Average_Hours_Worked_Per_Week',
-    'Job_Role'
+    'Absenteeism',
+    'Job_Involvement'
 ]
-# We need Attrition for y, so we define features_to_drop for X separately
-features_to_drop_for_X = low_mi_features_to_drop # Job_Role was already dropped by one-hot if it existed
 
-# Ensure the columns actually exist in df_undersampled before trying to drop
-features_to_drop_for_X = [col for col in features_to_drop_for_X if col in df_undersampled.columns]
-print(f"Dropping features to create X: {features_to_drop_for_X}")
+# Filter selected_features to only include columns present in the current dataframe
+available_features = [col for col in selected_features if col in df_model_input.columns]
+missing_features = [col for col in selected_features if col not in df_model_input.columns]
 
-# --- Splitting the UNDERSAMPLED data ---
-print("\n--- Splitting Undersampled Data ---")
-# Use df_undersampled instead of df_prepared
-y = df_undersampled['Attrition'] # Label from undersampled data
-# Drop 'Attrition' AND the low_mi_features to create X from undersampled data
-X = df_undersampled.drop(columns=['Attrition'] + features_to_drop_for_X) # Features from undersampled data
+if missing_features:
+    print(f"Warning: The following selected features were not found in the dataframe: {missing_features}")
+print(f"Using the following available features for modeling: {available_features}")
 
-print("Final features used for X:", X.columns.tolist()) # Verify the final features
+# --- Define Target (y) and Features (X) ---
+print("\n--- Defining Target (y) and Features (X) ---")
+target_variable = 'Attrition'
 
-# Split into test and training
-test_set_size = 0.20
-# random_seed is already defined above
+if target_variable not in df_model_input.columns:
+    raise ValueError(f"Target variable '{target_variable}' not found in the dataframe.")
+if not available_features:
+     raise ValueError("No features selected or available for modeling.")
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, # From undersampled data
-    y, # From undersampled data
+y = df_model_input[target_variable]
+X = df_model_input[available_features]
+
+print(f"Target variable (y): {target_variable}")
+print("Shape of X before split:", X.shape)
+print("Shape of y before split:", y.shape)
+if X.empty or y.empty:
+    raise ValueError("X or y is empty before splitting. Check data loading and preparation steps.")
+
+
+# --- Train-Validation-Test Split ---
+print("\n--- Splitting Data into Train/Validation/Test Sets (60:20:20) ---")
+random_seed = 42
+test_set_size = 0.20 # Test set size (20%)
+validation_set_size_relative = 0.25 # Validation set size relative to the remaining data (0.25 * 0.80 = 0.20)
+
+# Step 1: Split into Training+Validation (80%) and Test (20%)
+X_train_val, X_test, y_train_val, y_test = train_test_split(
+    X,
+    y,
     test_size=test_set_size,
     random_state=random_seed,
-    stratify=y # Stratify on the now balanced y
+    stratify=y # Stratify based on the target variable
 )
 
-print("\n--- Verification of Train/Test Split (Undersampled Data) ---")
+# Step 2: Split Training+Validation into Training (60% of total) and Validation (20% of total)
+# The new test_size here is validation_set_size_relative of the train_val set
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train_val,
+    y_train_val,
+    test_size=validation_set_size_relative,
+    random_state=random_seed, # Use the same random state for reproducibility
+    stratify=y_train_val # Stratify based on the train_val target
+)
+
+print("\n--- Verification of Train/Validation/Test Split ---")
 print("Shape of X_train:", X_train.shape)
+print("Shape of X_val:", X_val.shape)
 print("Shape of X_test:", X_test.shape)
 print("Shape of y_train:", y_train.shape)
+print("Shape of y_val:", y_val.shape)
 print("Shape of y_test:", y_test.shape)
 
-print("\nAttrition distribution in original undersampled y:\n", y.value_counts(normalize=True))
-print("\nAttrition distribution in y_train:\n", y_train.value_counts(normalize=True))
-print("\nAttrition distribution in y_test:\n", y_test.value_counts(normalize=True))
+# Verify distributions (optional but recommended)
+print(f"\n'{target_variable}' distribution in original y:\n", y.value_counts(normalize=True))
+print(f"\n'{target_variable}' distribution in y_train:\n", y_train.value_counts(normalize=True))
+print(f"\n'{target_variable}' distribution in y_val:\n", y_val.value_counts(normalize=True))
+print(f"\n'{target_variable}' distribution in y_test:\n", y_test.value_counts(normalize=True))
 
-# --- Scaling Features (for models that need it, like KNN) ---
-# Note: Trees/Naive Bayes don't strictly require scaling, so we'll apply it selectively
+
+# --- Preprocessing Before Models (Missing Values, Scaling) ---
+
+# 1. Handle Missing Values
+print("\n--- Handling Missing Values ---")
+# Check if X_train/X_val/X_test are empty
+if X_train.empty or X_val.empty or X_test.empty:
+     raise ValueError("X_train, X_val, or X_test is empty after splitting.")
+
+# Check if numeric (should be, based on feature selection, but good practice)
+numeric_cols_train = X_train.select_dtypes(include=np.number).columns
+if len(numeric_cols_train) != X_train.shape[1]:
+    non_numeric_cols = X_train.select_dtypes(exclude=np.number).columns.tolist()
+    print(f"Warning: Non-numeric columns detected in X_train after feature selection: {non_numeric_cols}. This might cause issues.")
+    # Consider adding explicit handling or ensure only numeric features are selected
+
+# Calculate medians ONLY from the training set
+train_medians = X_train[numeric_cols_train].median()
+print(f"Calculated medians from Training set: \n{train_medians}")
+
+# Fill NaN in training, validation, and test sets using TRAINING medians
+X_train.fillna(train_medians, inplace=True)
+X_val.fillna(train_medians, inplace=True)
+X_test.fillna(train_medians, inplace=True)
+print("Missing values filled using training set medians.")
+
+# 2. Scaling Features
 print("\n--- Scaling Features ---")
-scaler = StandardScaler()
-# Fit scaler ONLY on the training data
-X_train_scaled = scaler.fit_transform(X_train)
-# Transform both training and test data
-X_test_scaled = scaler.transform(X_test)
-print("Features scaled using StandardScaler (will be used for KNN).")
+print("Apply scaling? (y / n)")
+apply_scaling = input().strip().lower() == 'y'
+
+X_train_processed = X_train.copy() # Start with unscaled data
+X_val_processed = X_val.copy()
+X_test_processed = X_test.copy()
+
+if apply_scaling:
+    scaler = StandardScaler()
+    # Fit scaler ONLY on the training data
+    print("Fitting StandardScaler on Training data...")
+    scaler.fit(X_train)
+    # Transform training, validation, and test data
+    X_train_processed = scaler.transform(X_train)
+    X_val_processed = scaler.transform(X_val)
+    X_test_processed = scaler.transform(X_test)
+    print("Features scaled using StandardScaler.")
+    # Convert back to DataFrame to preserve column names if needed later (optional)
+    # X_train_processed = pd.DataFrame(X_train_processed, columns=X_train.columns, index=X_train.index)
+    # X_val_processed = pd.DataFrame(X_val_processed, columns=X_val.columns, index=X_val.index)
+    # X_test_processed = pd.DataFrame(X_test_processed, columns=X_test.columns, index=X_test.index)
+else:
+     print("Skipping feature scaling.")
+     # X_train_processed, X_val_processed, X_test_processed remain as the original filled dataframes
 
 
-# --- KNN Model (using SCALED undersampled data) ---
-if X_train is not None and y_train is not None:
-    print("\n--- K-Nearest Neighbors (KNN) Classifier (on Scaled Undersampled Data) ---")
+# --- KNN Model with Hyperparameter Tuning ---
+print(f"\n--- K-Nearest Neighbors (KNN) Classifier ---")
 
-    k_value = 6
-    print(f"Initializing KNN classifier with k={k_value}")
-    knn_model = KNeighborsClassifier(n_neighbors=k_value)
+# Define range of k values to test
+k_values = [3, 5, 7, 9, 11, 13, 15] # Example range
+best_k = -1
+best_f1_score = -1
 
-    print("Fitting the KNN model to the SCALED undersampled training data...")
-    # MODIFIED: Fit on scaled data
-    knn_model.fit(X_train_scaled, y_train)
+print(f"Tuning KNN: Testing k values {k_values} using the Validation set.")
+print(f"Performance Measure: Weighted F1-Score")
 
-    print("Predictions made on the SCALED test set using KNN.")
-     # MODIFIED: Predict on scaled data
-    y_pred_knn = knn_model.predict(X_test_scaled)
+for k in k_values:
+    # 1. Train on the TRAINING set
+    knn_model_val = KNeighborsClassifier(n_neighbors=k)
+    knn_model_val.fit(X_train_processed, y_train) # Use processed (potentially scaled) data
 
-    print("\n--- Evaluating KNN Model (on Undersampled Data) ---")
-    accuracy_knn = accuracy_score(y_test, y_pred_knn)
-    print(f"KNN Model Accuracy: {accuracy_knn:.4f}")
-    # Added zero_division=0
-    print("\nKNN Classification Report:\n", classification_report(y_test, y_pred_knn, zero_division=0))
-    print("\nKNN Confusion Matrix:\n", confusion_matrix(y_test, y_pred_knn))
+    # 2. Evaluate on the VALIDATION set
+    y_pred_val_knn = knn_model_val.predict(X_val_processed) # Predict on processed validation data
+    current_f1_score = f1_score(y_val, y_pred_val_knn, average='weighted', zero_division=0) # Use weighted F1 for potential imbalance
+    print(f"  k={k}: Validation Weighted F1-Score = {current_f1_score:.4f}")
 
+    # 3. Keep track of the best k
+    if current_f1_score > best_f1_score:
+        best_f1_score = current_f1_score
+        best_k = k
 
-# --- Naive Bayes Model (using UNSCALED undersampled data) ---
-# GaussianNB can technically handle scaled data, but often used unscaled.
-# Let's keep it unscaled for consistency with the previous NB run.
-if X_train is not None and y_train is not None:
-    print("\n--- Gaussian Naive Bayes Classifier (on Unscaled Undersampled Data) ---")
+print(f"\nBest k found: {best_k} (Validation Weighted F1-Score: {best_f1_score:.4f})")
 
-    print("Initializing Gaussian Naive Bayes classifier...")
-    nb_model = GaussianNB()
+# 4. Train the FINAL KNN model using the best k on the TRAINING set
+print(f"\nTraining final KNN model with k={best_k} on the Training set...")
+final_knn_model = KNeighborsClassifier(n_neighbors=best_k)
+final_knn_model.fit(X_train_processed, y_train)
 
-    print("Fitting the Naive Bayes model to the UNSCALED undersampled training data...")
-    # Fit on unscaled data
-    nb_model.fit(X_train, y_train)
+# 5. Evaluate the FINAL model on the TEST set
+print("\n--- Evaluating FINAL KNN Model on the **Test Set** ---")
+y_pred_test_knn = final_knn_model.predict(X_test_processed) # Predict on processed test data
 
-    print("Predictions made on the UNSCALED test set using Naive Bayes.")
-    # Predict on unscaled data
-    y_pred_nb = nb_model.predict(X_test)
-
-    print("\n--- Evaluating Naive Bayes Model (on Undersampled Data) ---")
-    accuracy_nb = accuracy_score(y_test, y_pred_nb)
-    print(f"Naive Bayes Model Accuracy: {accuracy_nb:.4f}")
-    # Added zero_division=0
-    print("\nNaive Bayes Classification Report:\n", classification_report(y_test, y_pred_nb, zero_division=0))
-    print("\nNaive Bayes Confusion Matrix:\n", confusion_matrix(y_test, y_pred_nb))
+accuracy_knn_test = accuracy_score(y_test, y_pred_test_knn)
+print(f"KNN Final Test Accuracy: {accuracy_knn_test:.4f}")
+print("\nKNN Final Test Classification Report:\n", classification_report(y_test, y_pred_test_knn, zero_division=0))
+print("\nKNN Final Test Confusion Matrix:\n", confusion_matrix(y_test, y_pred_test_knn))
 
 
-# --- START: Added Decision Tree Model ---
-if X_train is not None and y_train is not None:
-    print("\n--- Decision Tree Classifier (on Unscaled Undersampled Data) ---")
+# --- Naive Bayes Model ---
+# No hyperparameter tuning in this example, so train on Train, evaluate on Test
+print(f"\n--- Gaussian Naive Bayes Classifier ---")
 
-    print("Initializing Decision Tree classifier...")
-    # Using random_state for reproducibility
-    dt_model = DecisionTreeClassifier(random_state=random_seed)
+nb_model = GaussianNB()
 
-    print("Fitting the Decision Tree model to the UNSCALED undersampled training data...")
-    # Trees don't require scaling
-    dt_model.fit(X_train, y_train)
+# Train on the TRAINING set
+print("Training Naive Bayes model on the Training set...")
+nb_model.fit(X_train_processed, y_train) # Use processed (potentially scaled) data
 
-    print("Predictions made on the UNSCALED test set using Decision Tree.")
-    # Predict on unscaled data
-    y_pred_dt = dt_model.predict(X_test)
+# Evaluate on the TEST set
+print("\n--- Evaluating Naive Bayes Model on the **Test Set** ---")
+y_pred_test_nb = nb_model.predict(X_test_processed) # Predict on processed test data
 
-    print("\n--- Evaluating Decision Tree Model (on Undersampled Data) ---")
-    accuracy_dt = accuracy_score(y_test, y_pred_dt)
-    print(f"Decision Tree Model Accuracy: {accuracy_dt:.4f}")
-    # Added zero_division=0
-    print("\nDecision Tree Classification Report:\n", classification_report(y_test, y_pred_dt, zero_division=0))
-    print("\nDecision Tree Confusion Matrix:\n", confusion_matrix(y_test, y_pred_dt))
-# --- END: Added Decision Tree Model ---
+accuracy_nb_test = accuracy_score(y_test, y_pred_test_nb)
+print(f"Naive Bayes Test Accuracy: {accuracy_nb_test:.4f}")
+print("\nNaive Bayes Test Classification Report:\n", classification_report(y_test, y_pred_test_nb, zero_division=0))
+print("\nNaive Bayes Test Confusion Matrix:\n", confusion_matrix(y_test, y_pred_test_nb))
 
 
-# --- START: Added Random Forest Model ---
-if X_train is not None and y_train is not None:
-    print("\n--- Random Forest Classifier (on Unscaled Undersampled Data) ---")
+# --- Decision Tree Model ---
+# No hyperparameter tuning in this example, so train on Train, evaluate on Test
+# Note: Could add tuning for 'max_depth', 'min_samples_split' etc. using the validation set
+print(f"\n--- Decision Tree Classifier ---")
 
-    print("Initializing Random Forest classifier...")
-    # Using random_state for reproducibility, default n_estimators=100
-    rf_model = RandomForestClassifier(random_state=random_seed)
+# Added class_weight='balanced' as before, useful if undersampling wasn't used or perfect
+dt_model = DecisionTreeClassifier(random_state=random_seed, class_weight='balanced')
 
-    print("Fitting the Random Forest model to the UNSCALED undersampled training data...")
-    # Forests also don't strictly require scaling
-    rf_model.fit(X_train, y_train)
+# Train on the TRAINING set
+print("Training Decision Tree model on the Training set...")
+dt_model.fit(X_train_processed, y_train) # Use processed (potentially scaled) data
 
-    print("Predictions made on the UNSCALED test set using Random Forest.")
-    # Predict on unscaled data
-    y_pred_rf = rf_model.predict(X_test)
+# Evaluate on the TEST set
+print("\n--- Evaluating Decision Tree Model on the **Test Set** ---")
+y_pred_test_dt = dt_model.predict(X_test_processed) # Predict on processed test data
 
-    print("\n--- Evaluating Random Forest Model (on Undersampled Data) ---")
-    accuracy_rf = accuracy_score(y_test, y_pred_rf)
-    print(f"Random Forest Model Accuracy: {accuracy_rf:.4f}")
-    # Added zero_division=0
-    print("\nRandom Forest Classification Report:\n", classification_report(y_test, y_pred_rf, zero_division=0))
-    print("\nRandom Forest Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
-# --- END: Added Random Forest Model ---
+accuracy_dt_test = accuracy_score(y_test, y_pred_test_dt)
+print(f"Decision Tree Test Accuracy: {accuracy_dt_test:.4f}")
+print("\nDecision Tree Test Classification Report:\n", classification_report(y_test, y_pred_test_dt, zero_division=0))
+print("\nDecision Tree Test Confusion Matrix:\n", confusion_matrix(y_test, y_pred_test_dt))
+
+
+# --- Random Forest Model ---
+# No hyperparameter tuning in this example, so train on Train, evaluate on Test
+# Note: Could add tuning for 'n_estimators', 'max_depth' etc. using the validation set
+print(f"\n--- Random Forest Classifier ---")
+
+# Added class_weight='balanced' as before
+rf_model = RandomForestClassifier(random_state=random_seed, class_weight='balanced')
+
+# Train on the TRAINING set
+print("Training Random Forest model on the Training set...")
+rf_model.fit(X_train_processed, y_train) # Use processed (potentially scaled) data
+
+# Evaluate on the TEST set
+print("\n--- Evaluating Random Forest Model on the **Test Set** ---")
+y_pred_test_rf = rf_model.predict(X_test_processed) # Predict on processed test data
+
+accuracy_rf_test = accuracy_score(y_test, y_pred_test_rf)
+print(f"Random Forest Test Accuracy: {accuracy_rf_test:.4f}")
+print("\nRandom Forest Test Classification Report:\n", classification_report(y_test, y_pred_test_rf, zero_division=0))
+print("\nRandom Forest Test Confusion Matrix:\n", confusion_matrix(y_test, y_pred_test_rf))
 
 # --- END: Model Code ---
+print("\nScript finished.")
