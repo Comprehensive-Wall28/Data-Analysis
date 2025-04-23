@@ -143,26 +143,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 # --- START: Preprocessing Before Models (Missing Values, Scaling) ---
 
-#Handle Missing Values
-print("\n--- Handling Missing Values ---")
-# Check if X_train/X_test are empty
-if X_train.empty or X_test.empty:
-     raise ValueError("X_train or X_test is empty after feature selection/split.")
-
-#Check if numeric
-numeric_cols_train = X_train.select_dtypes(include=np.number).columns
-if len(numeric_cols_train) != X_train.shape[1]:
-    print("Warning: Non-numeric columns detected in X_train after feature selection. This might cause issues.")
-    print(f"Non-numeric columns: {X_train.select_dtypes(exclude=np.number).columns.tolist()}")
-
-train_medians = X_train[numeric_cols_train].median()
-# Fill NaN in training set with training medians
-X_train.fillna(train_medians, inplace=True)
-# Fill NaN in test set with training medians (to avoid data leakage)
-X_test.fillna(train_medians, inplace=True)
-
-
-# 2. Scaling Features
+# 1. Scaling Features
 print("\n--- Scaling Features ---")
 print("Apply scaling? (y / n)")
 ans = input()
