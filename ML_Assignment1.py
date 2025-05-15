@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-dataset = read_csv('employee_attrition_dataset.csv') #read the CSV
+dataset = read_csv('datasets/employee_attrition_dataset.csv') #read the CSV
 
 test_flag = False
 if test_flag:
